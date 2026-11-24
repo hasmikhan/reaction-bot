@@ -14,9 +14,15 @@ logging.basicConfig(
 )
 log = logging.getLogger("reaction-bot")
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
+BOT_TOKENS = [
+    t.strip()
+    for t in os.environ.get("BOT_TOKENS", os.environ.get("BOT_TOKEN", "")).split(",")
+    if t.strip()
+]
+if not BOT_TOKENS:
+    raise RuntimeError("BOT_TOKENS is not set")
 
-# Telegram-er allowed free reaction emoji
+# Free reaction emoji allowed by Telegram
 EMOJIS = ["👍", "❤", "🔥", "🥰", "👏", "🎉", "🤩", "💯", "😍", "⚡", "🏆", "🙏", "😎", "🤝", "👌"]
 
 if os.getenv("EMOJIS"):
@@ -69,13 +75,30 @@ def start_health_server():
     log.info("Health server on port %s", port)
 
 
+async def run_all() -> None:
+    apps = []
+    for token in BOT_TOKENS:
+        app = Application.builder().token(token).build()
+        app.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POSTS, react))
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling(
+            allowed_updates=["channel_post"], drop_pending_updates=True
+        )
+        apps.append(app)
+    log.info("Started %d bots", len(apps))
+    try:
+        await asyncio.Event().wait()
+    finally:
+        for app in apps:
+            await app.updater.stop()
+            await app.stop()
+            await app.shutdown()
+
+
 def main() -> None:
     start_health_server()
-    asyncio.set_event_loop(asyncio.new_event_loop())
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POSTS, react))
-    log.info("Bot started")
-    app.run_polling(allowed_updates=["channel_post"], drop_pending_updates=True)
+    asyncio.run(run_all())
 
 
 if __name__ == "__main__":
