@@ -22,9 +22,10 @@ BOT_TOKENS = [
 if not BOT_TOKENS:
     raise RuntimeError("BOT_TOKENS is not set")
 
-# Free reaction emoji allowed by Telegram
-EMOJIS = ["👍", "❤", "🔥", "🥰", "👏", "🎉", "🤩", "💯", "😍", "⚡", "🏆", "🙏", "😎", "🤝", "👌"]
+# Emoji list: channel-er enabled reactions-er sathe mill kore deya
+EMOJIS = ["🔥", "🤩", "💯", "😍", "⚡", "🏆", "😎", "😘", "👾", "😭", "🗿", "🤗", "🫡", "🎅", "🆒"]
 
+# Render-e EMOJIS variable dile ota use hobe (comma diye, space chhara)
 if os.getenv("EMOJIS"):
     EMOJIS = [e.strip() for e in os.environ["EMOJIS"].split(",") if e.strip()]
 
@@ -38,22 +39,24 @@ async def react(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if ALLOWED and msg.chat_id not in ALLOWED:
         return
 
-    emoji = random.choice(EMOJIS)
+    # Ekta emoji fail korle onno emoji diye abar try korbe (max 4 bar)
+    candidates = random.sample(EMOJIS, k=min(4, len(EMOJIS)))
 
-    for _ in range(3):
-        try:
-            await context.bot.set_message_reaction(
-                chat_id=msg.chat_id,
-                message_id=msg.message_id,
-                reaction=[ReactionTypeEmoji(emoji)],
-            )
-            log.info("Reacted %s to %s/%s", emoji, msg.chat_id, msg.message_id)
-            return
-        except RetryAfter as e:
-            await asyncio.sleep(e.retry_after + 1)
-        except TelegramError as e:
-            log.warning("Reaction failed: %s", e)
-            return
+    for emoji in candidates:
+        for _ in range(3):
+            try:
+                await context.bot.set_message_reaction(
+                    chat_id=msg.chat_id,
+                    message_id=msg.message_id,
+                    reaction=[ReactionTypeEmoji(emoji)],
+                )
+                log.info("Reacted %s to %s/%s", emoji, msg.chat_id, msg.message_id)
+                return
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+            except TelegramError as e:
+                log.warning("Reaction failed (%s): %s", emoji, e)
+                break  # ei emoji hobe na, porer emoji try koro
 
 
 class Health(BaseHTTPRequestHandler):
