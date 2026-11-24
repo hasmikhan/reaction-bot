@@ -1,14 +1,13 @@
 import os
 import random
 import logging
+import asyncio
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from telegram import ReactionTypeEmoji, Update
 from telegram.error import RetryAfter, TelegramError
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
-
-import asyncio
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO
@@ -17,18 +16,13 @@ log = logging.getLogger("reaction-bot")
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-# Telegram-er allowed free reaction emoji (shudhu eigulo e kaj korbe)
+# Telegram-er allowed free reaction emoji
 EMOJIS = ["👍", "❤", "🔥", "🥰", "👏", "🎉", "🤩", "💯", "😍", "⚡", "🏆", "🙏", "😎", "🤝", "👌"]
 
-# Optional: EMOJIS env var diye override kora jay, e.g. EMOJIS="👍,❤,🔥"
 if os.getenv("EMOJIS"):
     EMOJIS = [e.strip() for e in os.environ["EMOJIS"].split(",") if e.strip()]
 
-# Optional: shudhu ei channel(gulo)-te kaj korbe. e.g. CHANNEL_IDS="-1001234567890,-100987..."
 ALLOWED = {int(x) for x in os.getenv("CHANNEL_IDS", "").split(",") if x.strip()}
-
-# Ekta post-e koyta reaction dibe (bot-er jonno 1 ta e standard)
-REACTIONS_PER_POST = 1
 
 
 async def react(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -38,15 +32,16 @@ async def react(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if ALLOWED and msg.chat_id not in ALLOWED:
         return
 
-    emojis = random.sample(EMOJIS, k=min(REACTIONS_PER_POST, len(EMOJIS)))
-    reaction = [ReactionTypeEmoji(e) for e in emojis]
+    emoji = random.choice(EMOJIS)
 
-    for attempt in range(3):
+    for _ in range(3):
         try:
             await context.bot.set_message_reaction(
-                chat_id=msg.chat_id, message_id=msg.message_id, reaction=reaction
+                chat_id=msg.chat_id,
+                message_id=msg.message_id,
+                reaction=[ReactionTypeEmoji(emoji)],
             )
-            log.info("Reacted %s to %s/%s", emojis, msg.chat_id, msg.message_id)
+            log.info("Reacted %s to %s/%s", emoji, msg.chat_id, msg.message_id)
             return
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
@@ -55,7 +50,6 @@ async def react(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
 
 
-# ---- Tiny health-check server (Render/Koyeb free web service-er jonno) ----
 class Health(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -77,6 +71,7 @@ def start_health_server():
 
 def main() -> None:
     start_health_server()
+    asyncio.set_event_loop(asyncio.new_event_loop())
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POSTS, react))
     log.info("Bot started")
